@@ -107,6 +107,12 @@
     max-width:260px;
     line-height:1.6;
   }
+  #scoreHistory{
+    font-size:12px;
+    opacity:.85;
+    letter-spacing:.03em;
+  }
+  #scoreHistory b{ color:var(--gold); }
   #overlay button{
     margin-top:6px;
     padding:9px 22px;
@@ -187,6 +193,7 @@
   <div id="overlay">
     <h2 id="overlayTitle"></h2>
     <p id="overlayText"></p>
+    <p id="scoreHistory"></p>
     <button id="overlayBtn">もう一度</button>
     <button id="viewArtBtn" class="secondaryBtn">絵を見る</button>
   </div>
@@ -589,6 +596,11 @@
       const justPressed = isPointerDown && (performance.now() - pressStartTime) <= CATCH_WINDOW_MS;
       if(ball.speedLevel === SPEED_LEVELS.length && justPressed){
         // 最高速時(強化弾が戻ってきた場合も含む)、パドル接触の瞬間にジャストでクリック/タップしたらキャッチ(吸着)
+        if(ball.powered){
+          // 強化弾をキャッチ: 通常+100、ジャックポット後のspeed7時は+150
+          score += (SPEED_LEVELS.length >= 7) ? 150 : 100;
+          updateHud();
+        }
         ball.attached = true;
         ball.powered = false;
         ball.charge = 0;
@@ -682,6 +694,34 @@
     }
   }
 
+  // ---------- 直近3回のスコア記録 ----------
+  const SCORE_HISTORY_KEY = 'kenmo_kuzushi_recent_scores';
+  function loadScoreHistory(){
+    try{
+      const raw = localStorage.getItem(SCORE_HISTORY_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    }catch(e){
+      return [];
+    }
+  }
+  function saveScoreToHistory(newScore){
+    let history = loadScoreHistory();
+    history.push(newScore);
+    if(history.length > 3) history = history.slice(history.length - 3); // 直近3回だけ保持
+    try{
+      localStorage.setItem(SCORE_HISTORY_KEY, JSON.stringify(history));
+    }catch(e){ /* 保存できない環境では無視 */ }
+    return history;
+  }
+  function renderScoreHistory(history){
+    const el = document.getElementById('scoreHistory');
+    if(!history.length){ el.textContent = ''; return; }
+    const best = Math.max(...history);
+    const line = history.map(s => s === best ? `<b>${s}</b>` : s).join(' / ');
+    el.innerHTML = '直近' + history.length + '回: ' + line + ' (最高スコア: ' + best + ')';
+  }
+
   function endGame(win){
     state = 'over';
     const overlay = document.getElementById('overlay');
@@ -691,6 +731,8 @@
       ? '夕焼けの絵が完全に現れました。スコア: ' + score
       : 'ライフがなくなりました。スコア: ' + score) + ' ' + jackpotNote;
     document.getElementById('viewArtBtn').style.display = win ? 'inline-block' : 'none';
+    const history = saveScoreToHistory(score);
+    renderScoreHistory(history);
     overlay.style.display = 'flex';
   }
 
